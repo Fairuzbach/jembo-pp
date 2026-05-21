@@ -122,7 +122,7 @@ $submitRequest = function () {
         'description' => strtoupper($this->newDescription),
         'purpose' => $this->newPurpose,
         'unit' => $this->newUnit,
-        'estimated_price' => $this->newPrice,
+        'estimated_price' => $this->newPrice ? $this->newPrice : null,
         'status' => 'pending',
     ]);
 
