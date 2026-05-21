@@ -9,13 +9,14 @@ class WhatsappService
 {
     public static function send($targetPhone, $messageContent)
     {
-        // Pastikan IP dan Port API Node.js Anda sudah benar
         $url = 'http://192.168.10.40:3000/send/message';
         $phone = self::formatPhone($targetPhone);
+        $header = 'X-Device-Id: device01';
 
         try {
-            // Tambahkan timeout 3 detik sebagai jaring pengaman
-            $response = Http::timeout(3)->post($url, [
+            $response = Http::withHeaders([
+                'X-Device-Id' => 'device01'
+            ])->post($url, [
                 'phone' => $phone,
                 'message' => $messageContent
             ]);
