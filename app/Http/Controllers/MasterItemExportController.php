@@ -1106,6 +1106,71 @@ class MasterItemExportController extends Controller
                 unset($spreadsheet11);
             }
             // =============================================================
+            // PROSES FILE Session 11
+            // =============================================================
+            $templatePath11 = storage_path('app/templates/Session 11.xlsx');
+            if (file_exists($templatePath11)) {
+                $spreadsheet11 = IOFactory::load($templatePath11);
+                $sheet11 = $spreadsheet11->getActiveSheet();
+
+                $highestCol11 = $sheet11->getHighestColumn();
+                $headers11 = $sheet11->rangeToArray('A1:' . $highestCol11 . '1', NULL, TRUE, FALSE)[0];
+
+                // 1. FUNGSI PENCARI KOLOM KEBAL SPASI & HURUF BESAR/KECIL
+                $getCol11 = function ($headerName) use ($headers11) {
+                    $targetName = strtolower(trim($headerName));
+                    foreach ($headers11 as $index => $actualHeaderName) {
+                        if (strtolower(trim((string)$actualHeaderName)) === $targetName) {
+                            return \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($index + 1);
+                        }
+                    }
+                    return null;
+                };
+
+                $row11 = 2;
+                $hasSerializedData = false;
+
+                foreach ($items as $item) {
+                    $isSerialized = $item->serialization->is_serialized ?? false;
+                    if (!$isSerialized) {
+                        continue;
+                    }
+
+                    $hasSerializedData = true;
+
+                    // --- 1. DATA DINAMIS ---
+                    if ($col = $getCol11('Company')) $sheet11->setCellValue($col . $row11, 400);
+                    $serialNo = $item->serial_number ?? '';
+                    if ($col = $getCol11('Serial Number')) $sheet11->setCellValue($col . $row11, $serialNo);
+
+                    if ($col = $getCol11('Item (child)')) $sheet11->setCellValue($col . $row11, $item->item_code);
+
+                    if ($col = $getCol11('Item Type')) $sheet11->setCellValue($col . $row11, 'Purchased');
+                    if ($col = $getCol11('Status')) $sheet11->setCellValue($col . $row11, 'Initial');
+                    if ($col = $getCol11('Lot')) $sheet11->setCellValue($col . $row11, 'Lot for Lot');
+                    if ($col = $getCol11('Revision')) $sheet11->setCellValue($col . $row11, $item->name);
+
+                    $row11++;
+                }
+                // Hanya masukkan file ke dalam ZIP jika ada minimal 1 barang berstatus Serialized
+                if ($hasSerializedData) {
+                    // Proteksi Ghost Rows
+                    $highestRow11 = $sheet11->getHighestRow();
+                    if ($highestRow11 >= $row11) {
+                        $sheet11->removeRow($row11, $highestRow11 - $row11 + 1);
+                    }
+
+                    $fileName11 = 'Session 11.xlsx';
+                    $filePath11 = storage_path('app/public/temp/' . $fileName11);
+                    $writer11 = IOFactory::createWriter($spreadsheet11, 'Xlsx');
+                    $writer11->save($filePath11);
+                    $zip->addFile($filePath11, $fileName11);
+                }
+
+                $spreadsheet11->disconnectWorksheets();
+                unset($spreadsheet11);
+            }
+            // =============================================================
             // PROSES FILE 12: Common - Standard Cost - Master Data - Item Costing
             // =============================================================
             $templatePath12 = storage_path('app/templates/12. Common - Standard Cost - Master Data - Item Costing.xlsx');
