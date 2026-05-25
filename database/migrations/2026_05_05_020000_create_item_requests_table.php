@@ -15,11 +15,12 @@ return new class extends Migration
             $table->foreignId('item_group_id')->nullable()->constrained('item_groups');
             $table->string('new_group_code')->nullable();
             $table->string('new_group_desc')->nullable();
-
-            // --- TAMBAHKAN BARIS INI ---
             $table->boolean('is_group_synced')->default(false);
-            // ---------------------------
-
+            $table->string('department_code')->nullable();
+            $table->string('category_code')->nullable();
+            $table->string('subcategory_code')->nullable();
+            $table->string('type_code')->nullable();
+            $table->string('item_code')->nullable();
             $table->string('name');
             $table->text('description')->nullable();
             $table->string('purpose')->nullable();

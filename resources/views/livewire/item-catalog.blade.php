@@ -1,9 +1,10 @@
 <?php
 
-use function Livewire\Volt\{state, computed};
+use function Livewire\Volt\{state, computed, with};
 use App\Models\MasterItem;
 use App\Models\ItemRequest;
 use App\Models\ItemGroup;
+use Livewire\Volt\Component;
 
 // State Navigasi Tab
 state(['activeTab' => 'master_items']);
@@ -19,6 +20,12 @@ state([
     'newPurpose' => '',
     'newUnit' => '',
     'newPrice' => '',
+    'item_code' => '',
+
+    'selectedCategory' => '',
+    'selectedSubcategory' => '',
+    'selectedType' => '',
+    'departmentCode' => strtoupper(auth()->user()->dept->code ?? 'XX'),
 
     // Variabel Khusus Item Group
     'isNewGroup' => false,
@@ -27,6 +34,74 @@ state([
     'newGroupCode' => '',
     'newGroupDesc' => '',
 ]);
+
+with(
+    fn() => [
+        'categories' => [
+            'SV' => 'SV - SERVICE/JASA',
+            'IT' => 'IT - IT',
+            'SA' => 'SA - SAFETY & PPE',
+            'PK' => 'PK - PRINTING/PACKAGING/STATIONERY',
+            'CH' => 'CH - CHEMICAL/LUBRICANT/PAINT',
+            'IN' => 'IN - INSTRUMENT/TEST/CALIBRATION',
+            'TL' => 'TL - TOOLS/PERKAKAS',
+            'HD' => 'HD - HARDWARE/FASTENER',
+            'CM' => 'CM - CABLE & PROCESS TOOLING',
+            'OT' => 'OT - OTHER',
+            'KB' => 'KB - KEBERSIHAN',
+            'AK' => 'AK - ATK',
+        ],
+
+        'subcategories' => [
+            'SV' => ['CALB' => 'CALIBRATION SERVICE', 'FABR' => 'FABRICATION SERVICE', 'INST' => 'INSTALLATION SERVICE', 'REPR' => 'REPAIR', 'SERV' => 'GENERAL SERVICE', 'RENT' => 'RENTAL SERVICE'],
+            'IT' => ['COMP' => 'COMPUTER HARDWARE', 'ITGN' => 'GENERAL IT', 'NETW' => 'NETWORKING', 'PRNT' => 'PRINTER & IMAGING', 'STOR' => 'STORAGE DEVICE'],
+            'SA' => ['PPEX' => 'PPE', 'FIRE' => 'FIRE SAFETY', 'SAFE' => 'GENERAL SAFETY'],
+            'PK' => ['PACK' => 'PACKAGING GENERAL', 'LABL' => 'LABEL & STICKER'],
+            'CH' => ['LUBE' => 'LUBRICANT', 'CHEM' => 'CHEMICAL GENERAL', 'PAIN' => 'PAINT & THINNER', 'ADHV' => 'ADHESIVE/SEALANT'],
+            'IN' => ['GAUG' => 'GAUGE', 'INST' => 'GENERAL INSTRUMENT', 'MEAS' => 'MEASURING INSTRUMENT', 'TEST' => 'TESTING INSTRUMENT', 'WEIG' => 'WEIGHING INSTRUMENT'],
+            'TL' => ['HAND' => 'HAND TOOLS', 'PWRT' => 'POWER TOOLS', 'TOOL' => 'GENERAL TOOL', 'CUTT' => 'CUTTING TOOLS'],
+            'HD' => ['FAST' => 'FASTENER / BAUT', 'BOLT' => 'BOLT', 'NUTS' => 'NUT', 'WASH' => 'WASHER'],
+            'CM' => ['CABL' => 'CABLE / CABLE PRODUCT', 'DIES' => 'DIE', 'EMBS' => 'EMBOSS ITEM', 'MOUL' => 'MOULD', 'PROC' => 'PROCESS TOOLING'],
+            'KB' => ['CLEA' => 'CLEANING CHEMICAL', 'TOOL' => 'PERALATAN KEBERSIHAN'],
+            'AK' => ['STAT' => 'STATIONERY', 'INKS' => 'INK/TONER/RIBBON', 'PRNT' => 'PRINTING', 'PAPR' => 'PAPER'],
+            'OT' => ['OTHR' => 'OTHER / LAIN-LAIN'],
+        ],
+
+        'types' => [
+            'SRV' => 'SRV - SERVICE/REPAIR/JASA',
+            'CAL' => 'CAL - CALIBRATION/TESTING',
+            'FBR' => 'FBR - FABRICATION/CUSTOM MADE',
+            'INS' => 'INS - INSTALLATION/SETUP',
+            'RNT' => 'RNT - RENTAL/SEWA',
+            'ASM' => 'ASM - ASSEMBLY/KIT/SET/MODULE',
+            'DOC' => 'DOC - DOCUMENT/STANDARD/SPECIFICATION',
+            'TOL' => 'TOL - TOOL/PERKAKAS',
+            'EQU' => 'EQU - EQUIPMENT/MESIN/DEVICE',
+            'CON' => 'CON - CONSUMABLE',
+            'MAT' => 'MAT - RAW MATERIAL',
+            'PRT' => 'PRT - PART/COMPONENT',
+        ],
+    ],
+);
+
+$generateItemCode = function () {
+    if ($this->departmentCode && $this->selectedCategory && $this->selectedSubcategory && $this->selectedType) {
+        $prefix = strtoupper($this->departmentCode . $this->selectedCategory . $this->selectedSubcategory . $this->selectedType);
+
+        // Cek nilai tertinggi di Master Item dan Request (hindari bentrok)
+        $lastMaster = MasterItem::where('item_code', 'like', $prefix . '%')->max('item_code');
+        $lastRequest = ItemRequest::where('item_code', 'like', $prefix . '%')
+            ->where('status', '!=', 'rejected')
+            ->max('item_code');
+
+        $highestCode = max($lastMaster, $lastRequest);
+        $nextNumber = $highestCode ? ((int) substr($highestCode, -5)) + 1 : 1;
+
+        $this->item_code = $prefix . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
+    } else {
+        $this->dispatch('swal', ['icon' => 'warning', 'title' => 'Gagal', 'text' => 'Pilih Kategori, Sub-Kategori, dan Tipe Barang terlebih dahulu!']);
+    }
+};
 
 // Computed: Daftar Item Group untuk Tab Referensi
 $itemGroups = computed(function () {
@@ -99,6 +174,10 @@ $submitRequest = function () {
         return;
     }
 
+    if (empty($this->item_code)) {
+        $this->dispatch('swal', ['icon' => 'warning', 'title' => 'Gagal', 'text' => 'Silakan generate Item Code terlebih dahulu.']);
+    }
+
     // 2. Validasi Item Group
     if ($this->isNewGroup) {
         if (empty($this->newGroupCode) || empty($this->newGroupDesc)) {
@@ -124,11 +203,16 @@ $submitRequest = function () {
         'unit' => $this->newUnit,
         'estimated_price' => $this->newPrice ? $this->newPrice : null,
         'status' => 'pending',
+        'department_code' => $this->departmentCode,
+        'category_code' => $this->selectedCategory,
+        'subcategory_code' => $this->selectedSubcategory,
+        'type_code' => $this->selectedType,
+        'item_code' => $this->item_code,
     ]);
 
     // 4. Reset Form & Tutup Modal
     $this->showModal = false;
-    $this->reset(['newName', 'newDescription', 'newPurpose', 'newUnit', 'newPrice', 'isNewGroup', 'selectedGroupId', 'groupSearch', 'newGroupCode', 'newGroupDesc']);
+    $this->reset(['newName', 'newDescription', 'newPurpose', 'newUnit', 'newPrice', 'isNewGroup', 'selectedGroupId', 'groupSearch', 'newGroupCode', 'newGroupDesc', 'selectedCategory', 'selectedSubcategory', 'selectedType', 'departmentCode']);
     $this->dispatch('swal', ['icon' => 'success', 'title' => 'Berhasil', 'text' => 'Pengajuan berhasil dikirim dan menunggu persetujuan Procurement.']);
 };
 
@@ -390,6 +474,78 @@ $submitRequest = function () {
                                 </div>
                             </div>
                         @endif
+                    </div>
+                    <label class="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Item
+                        Code</label>
+                    <div
+                        class="p-6 rounded-2xl bg-[#e0e5ec] shadow-inner border border-gray-300/50 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+
+                        <div>
+                            <label
+                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-gray-400">Dept
+                                (DD)</label>
+                            <input type="text" wire:model="departmentCode" readonly
+                                class="w-full p-3 rounded-xl bg-[#d1d9e6] border-none outline-none text-gray-600 font-black text-center uppercase cursor-not-allowed shadow-sm">
+                        </div>
+
+                        <div>
+                            <label
+                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-blue-600">Category
+                                (CC)</label>
+                            <select wire:model.live="selectedCategory"
+                                class="w-full p-3 rounded-xl bg-[#e0e5ec] shadow-[5px_5px_10px_#b8b9be,-5px_-5px_10px_#ffffff] border-none outline-none text-gray-700 font-bold text-xs">
+                                <option value="">-- PILIH CATEGORY --</option>
+                                @foreach ($categories as $code => $label)
+                                    <option value="{{ $code }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <label
+                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-blue-600">Sub-Category
+                                (SSSS)</label>
+                            <select wire:model.live="selectedSubcategory"
+                                {{ empty($selectedCategory) ? 'disabled' : '' }}
+                                class="w-full p-3 rounded-xl bg-[#e0e5ec] shadow-[5px_5px_10px_#b8b9be,-5px_-5px_10px_#ffffff] border-none outline-none text-gray-700 font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                                <option value="">-- PILIH SUB-CATEGORY --</option>
+                                @if (!empty($selectedCategory) && isset($subcategories[$selectedCategory]))
+                                    @foreach ($subcategories[$selectedCategory] as $code => $label)
+                                        <option value="{{ $code }}">{{ $code }} -
+                                            {{ $label }}
+                                        </option>
+                                    @endforeach
+                                @endif
+                            </select>
+                        </div>
+
+                        <div>
+                            <label
+                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-blue-600">Type
+                                (TTT)</label>
+                            <select wire:model.live="selectedType"
+                                class="w-full p-3 rounded-xl bg-[#e0e5ec] shadow-[5px_5px_10px_#b8b9be,-5px_-5px_10px_#ffffff] border-none outline-none text-gray-700 font-bold text-xs">
+                                <option value="">-- PILIH TYPE --</option>
+                                @foreach ($types as $code => $label)
+                                    <option value="{{ $code }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-6 bg-white/40 p-4 rounded-2xl border border-white flex gap-4 items-center">
+                        <div class="flex-1">
+                            <label
+                                class="text-[11px] font-black tracking-widest uppercase ml-2 mb-1 block text-gray-500">Generated
+                                Item Code (ERP ID)</label>
+                            <input type="text" wire:model="item_code"
+                                placeholder="Kombinasikan opsi di atas lalu klik Generate..." readonly
+                                class="w-full p-4 rounded-xl bg-[#e0e5ec] shadow-inner border-none outline-none text-lg font-black text-blue-700 uppercase tracking-widest text-center cursor-not-allowed">
+                        </div>
+                        <button type="button" wire:click="generateItemCode"
+                            class="px-8 py-4 mt-5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black uppercase tracking-widest text-xs shadow-[0_10px_20px_rgba(59,130,246,0.3)] hover:scale-105 transition-transform whitespace-nowrap">
+                            ✨ Generate Code
+                        </button>
                     </div>
                     <div>
                         <label

@@ -17,6 +17,7 @@ new class extends Component {
     public $item_name = '';
     public $unit = 'pcs';
     public $unit_child = 'Pieces buah';
+    public $department_id = null;
 
     // Variabel untuk Rules Generate Code
     public $departmentCode = ''; // DD
@@ -32,53 +33,6 @@ new class extends Component {
     public $groupSearch = '';
     public $isDropdownOpen = false;
     public $isSearching = false;
-
-    // Master Data Pilihan (Sesuai Rules Anda)
-    public $categories = [
-        'SV' => 'SV - SERVICE/JASA',
-        'IT' => 'IT - IT',
-        'SA' => 'SA - SAFETY & PPE',
-        'PK' => 'PK - PRINTING/PACKAGING/STATIONERY',
-        'CH' => 'CH - CHEMICAL/LUBRICANT/PAINT',
-        'IN' => 'IN - INSTRUMENT/TEST/CALIBRATION',
-        'TL' => 'TL - TOOLS/PERKAKAS',
-        'HD' => 'HD - HARDWARE/FASTENER',
-        'CM' => 'CM - CABLE & PROCESS TOOLING',
-        'OT' => 'OT - OTHER',
-        'KB' => 'KB - KEBERSIHAN',
-        'AK' => 'AK - ATK',
-    ];
-
-    public $types = [
-        'SRV' => 'SRV - SERVICE/REPAIR/JASA',
-        'CAL' => 'CAL - CALIBRATION/TESTING',
-        'FBR' => 'FBR - FABRICATION/CUSTOM MADE',
-        'INS' => 'INS - INSTALLATION/SETUP',
-        'RNT' => 'RNT - RENTAL/SEWA',
-        'ASM' => 'ASM - ASSEMBLY/KIT/SET/MODULE',
-        'DOC' => 'DOC - DOCUMENT/STANDARD/SPECIFICATION',
-        'TOL' => 'TOL - TOOL/PERKAKAS',
-        'EQU' => 'EQU - EQUIPMENT/MESIN/DEVICE',
-        'CON' => 'CON - CONSUMABLE',
-        'MAT' => 'MAT - RAW MATERIAL',
-        'PRT' => 'PRT - PART/COMPONENT',
-    ];
-
-    // Struktur Data Sub-Kategori (Silakan sesuaikan isi kode 4-digitnya dengan gambar Anda)
-    public $subcategories = [
-        'SV' => ['CALB' => 'CALIBRATION SERVICE', 'FABR' => 'FABRICATION SERVICE', 'INST' => 'INSTALLATION SERVICE', 'REPR' => 'REPAIR', 'SERV' => 'GENERAL SERVICE', 'RENT' => 'RENTAL SERVICE'],
-        'IT' => ['COMP' => 'COMPUTER HARDWARE', 'ITGN' => 'GENERAL IT', 'NETW' => 'NETWORKING', 'PRNT' => 'PRINTER & IMAGING', 'STOR' => 'STORAGE DEVICE'],
-        'SA' => ['PPEX' => 'PPE', 'FIRE' => 'FIRE SAFETY', 'SAFE' => 'GENERAL SAFETY'],
-        'PK' => ['PACK' => 'PACKAGING GENERAL', 'LABL' => 'LABEL & STICKER'],
-        'CH' => ['LUBE' => 'LUBRICANT', 'CHEM' => 'CHEMICAL GENERAL', 'PAIN' => 'PAINT & THINNER', 'ADHV' => 'ADHESIVE/SEALANT'],
-        'IN' => ['GAUG' => 'GAUGE', 'INST' => 'GENERAL INSTRUMENT', 'MEAS' => 'MEASURING INSTRUMENT', 'TEST' => 'TESTING INSTRUMENT', 'WEIG' => 'WEIGHING INSTRUMENT'],
-        'TL' => ['HAND' => 'HAND TOOLS', 'PWRT' => 'POWER TOOLS', 'TOOL' => 'GENERAL TOOL', 'CUTT' => 'CUTTING TOOLS'],
-        'HD' => ['FAST' => 'FASTENER / BAUT', 'BOLT' => 'BOLT', 'NUTS' => 'NUT', 'WASH' => 'WASHER'],
-        'CM' => ['CABL' => 'CABLE / CABLE PRODUCT', 'DIES' => 'DIE', 'EMBS' => 'EMBOSS ITEM', 'MOUL' => 'MOULD', 'PROC' => 'PROCESS TOOLING'],
-        'KB' => ['CLEA' => 'CLEANING CHEMICAL', 'TOOL' => 'PERALATAN KEBERSIHAN'],
-        'AK' => ['STAT' => 'STATIONERY', 'INKS' => 'INK/TONER/RIBBON', 'PRNT' => 'PRINTING', 'PAPR' => 'PAPER'],
-        'OT' => ['OTHR' => 'OTHER / LAIN-LAIN'],
-    ];
 
     // --- STEP 2 s/d STEP 3 Variables ---
     public $site_code = 'JCC1';
@@ -110,23 +64,15 @@ new class extends Component {
     {
         if ($itemRequestId) {
             $this->itemRequestId = $itemRequestId;
-
             // Eager load relasi requester dan dept-nya
             $req = ItemRequest::with('requester.dept')->find($itemRequestId);
-
             if ($req) {
                 // 1. Tarik Data Default dari Pengajuan
                 $this->item_name = $req->name;
                 $this->unit = $req->unit;
-
-                // 2. KUNCI DD: Ambil otomatis kode departemen dari requester pengaju
-                if ($req->requester && $req->requester->dept) {
-                    $this->departmentCode = strtoupper($req->requester->dept->code);
-                } else {
-                    $this->departmentCode = 'OT'; // Default 'OTHER' jika data dept tidak ditemukan
-                }
-
-                // 3. Set Item Group jika requester sudah memilih grup yang ada sebelumnya
+                $this->item_code = $req->item_code;
+                $this->department_id = $req->requester->department_id ?? null;
+                // 2. Set Item Group jika requester sudah memilih grup yang ada sebelumnya
                 if ($req->item_group_id) {
                     $this->item_group_id = $req->item_group_id;
                     $group = ItemGroup::find($req->item_group_id);
@@ -166,59 +112,17 @@ new class extends Component {
         $this->isDropdownOpen = false;
     }
 
-    // --- LOGIKA GENERATE ITEM CODE (DDCCSSSSTTTXXXXX) ---
-    public function generateItemCode()
-    {
-        // 1. Validasi Kelengkapan Prefix
-        if (empty($this->departmentCode) || empty($this->selectedCategory) || empty($this->selectedSubcategory) || empty($this->selectedType)) {
-            $this->dispatch('swal', [
-                'icon' => 'warning',
-                'title' => 'Gagal Generate',
-                'text' => 'Harap tentukan Kategori, Sub-Kategori, dan Tipe terlebih dahulu!',
-            ]);
-            return;
-        }
-
-        // 2. Gabungkan Komponen Menjadi Prefix Utama (11 Karakter)
-        $prefix = strtoupper($this->departmentCode . $this->selectedCategory . $this->selectedSubcategory . $this->selectedType);
-
-        // 3. Cari Running Number Terakhir di Database MasterItem Berdasarkan Prefix Ini
-        $lastItem = MasterItem::where('item_code', 'like', $prefix . '%')
-            ->orderBy('item_code', 'desc')
-            ->first();
-
-        if ($lastItem) {
-            // Ambil 5 digit terakhir kodenya, konversi ke int, lalu tambah 1
-            $lastRunningNumber = (int) substr($lastItem->item_code, -5);
-            $nextNumber = $lastRunningNumber + 1;
-        } else {
-            // Jika belum pernah ada kombinasi prefix ini, mulai dari 1
-            $nextNumber = 1;
-        }
-
-        // 4. Set Hasil Akhir ke Variabel $item_code (Pad dengan angka 0 di depan hingga total panjang 5 digit)
-        $this->item_code = $prefix . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
-
-        $this->dispatch('swal', [
-            'icon' => 'success',
-            'title' => 'Kode Berhasil Dibuat',
-            'text' => "Item Code: {$this->item_code}",
-        ]);
-    }
-
     public function nextStep()
     {
         if ($this->currentStep == 1) {
             $this->validate(
                 [
-                    'item_code' => 'required|string|size:16|unique:master_items,item_code',
                     'item_name' => 'required|string',
                     'unit' => 'required|string',
                 ],
                 [
-                    'item_code.required' => 'Item Code wajib diisi.',
-                    'item_code.size' => 'Item Code harus terdiri dari tepat 16 karakter/digit!',
-                    'item_code.unique' => 'Item Code ini sudah pernah didaftarkan.',
+                    'item_name.required' => 'Nama Item wajib diisi.',
+                    'unit.required' => 'Satuan (Unit) wajib diisi.',
                 ],
             );
         }
@@ -239,7 +143,6 @@ new class extends Component {
 
         // 2. Siapkan Aturan Validasi Dasar
         $rules = [
-            'item_code' => 'required|string|size:16|unique:master_items,item_code',
             'item_name' => 'required|string',
         ];
 
@@ -251,25 +154,17 @@ new class extends Component {
             $this->serial_number = '';
         }
 
-        // 4. Eksekusi Validasi beserta Custom Message
-        $this->validate($rules, [
-            'item_code.required' => 'Item Code wajib diisi.',
-            'item_code.size' => 'Item Code harus terdiri dari tepat 16 karakter/digit!',
-            'item_code.unique' => 'Item Code ini sudah pernah didaftarkan di sistem.',
-        ]);
-
         DB::beginTransaction();
         try {
             // 5. Simpan ke tabel master_items
             $master = MasterItem::create([
                 'item_request_id' => $this->itemRequestId,
                 'item_code' => strtoupper($this->item_code),
-                // PENGAMAN ANTI-NULL: Kirim string kosong ('') jika bukan barang serialized
                 'serial_number' => $this->is_serialized ? strtoupper($this->serial_number) : '',
                 'name' => $this->item_name,
                 'unit' => $this->unit,
                 'unit_child' => $this->unit_child,
-                // Menggunakan item_group_id sesuai deklarasi variabel Anda sebelumnya
+                'department_id' => $this->department_id,
                 'item_group_id' => strtoupper($this->item_group_id ?? ''),
                 'is_synced' => false,
             ]);
@@ -357,77 +252,15 @@ new class extends Component {
                     <h3 class="text-xl font-black text-gray-700 mb-4 border-b-2 border-gray-300 pb-2 uppercase">1.
                         General Information & Klasifikasi ERP</h3>
 
-                    <div
-                        class="p-6 rounded-2xl bg-[#e0e5ec] shadow-inner border border-gray-300/50 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-
-                        <div>
-                            <label
-                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-gray-400">Dept
-                                (DD)</label>
-                            <input type="text" wire:model="departmentCode" readonly
-                                class="w-full p-3 rounded-xl bg-[#d1d9e6] border-none outline-none text-gray-600 font-black text-center uppercase cursor-not-allowed shadow-sm">
-                        </div>
-
-                        <div>
-                            <label
-                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-blue-600">Category
-                                (CC)</label>
-                            <select wire:model.live="selectedCategory"
-                                class="w-full p-3 rounded-xl bg-[#e0e5ec] shadow-[5px_5px_10px_#b8b9be,-5px_-5px_10px_#ffffff] border-none outline-none text-gray-700 font-bold text-xs">
-                                <option value="">-- PILIH CATEGORY --</option>
-                                @foreach ($categories as $code => $label)
-                                    <option value="{{ $code }}">{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div>
-                            <label
-                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-blue-600">Sub-Category
-                                (SSSS)</label>
-                            <select wire:model.live="selectedSubcategory"
-                                {{ empty($selectedCategory) ? 'disabled' : '' }}
-                                class="w-full p-3 rounded-xl bg-[#e0e5ec] shadow-[5px_5px_10px_#b8b9be,-5px_-5px_10px_#ffffff] border-none outline-none text-gray-700 font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-                                <option value="">-- PILIH SUB-CATEGORY --</option>
-                                @if (!empty($selectedCategory) && isset($subcategories[$selectedCategory]))
-                                    @foreach ($subcategories[$selectedCategory] as $code => $label)
-                                        <option value="{{ $code }}">{{ $code }} - {{ $label }}
-                                        </option>
-                                    @endforeach
-                                @endif
-                            </select>
-                        </div>
-
-                        <div>
-                            <label
-                                class="text-[10px] font-black tracking-widest uppercase ml-2 mb-1 block text-blue-600">Type
-                                (TTT)</label>
-                            <select wire:model.live="selectedType"
-                                class="w-full p-3 rounded-xl bg-[#e0e5ec] shadow-[5px_5px_10px_#b8b9be,-5px_-5px_10px_#ffffff] border-none outline-none text-gray-700 font-bold text-xs">
-                                <option value="">-- PILIH TYPE --</option>
-                                @foreach ($types as $code => $label)
-                                    <option value="{{ $code }}">{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="mb-6 bg-white/40 p-4 rounded-2xl border border-white flex gap-4 items-center">
-                        <div class="flex-1">
-                            <label
-                                class="text-[11px] font-black tracking-widest uppercase ml-2 mb-1 block text-gray-500">Generated
-                                Item Code (ERP ID)</label>
-                            <input type="text" wire:model="item_code"
-                                placeholder="Kombinasikan opsi di atas lalu klik Generate..." readonly
-                                class="w-full p-4 rounded-xl bg-[#e0e5ec] shadow-inner border-none outline-none text-lg font-black text-blue-700 uppercase tracking-widest text-center cursor-not-allowed">
-                        </div>
-                        <button type="button" wire:click="generateItemCode"
-                            class="px-8 py-4 mt-5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black uppercase tracking-widest text-xs shadow-[0_10px_20px_rgba(59,130,246,0.3)] hover:scale-105 transition-transform whitespace-nowrap">
-                            ✨ Generate Code
-                        </button>
-                    </div>
-
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="md:col-span-2 mb-4">
+                            <label
+                                class="text-[11px] font-black tracking-widest uppercase ml-2 mb-1 block text-blue-500">
+                                Item Code (Dari Pengajuan)
+                            </label>
+                            <input type="text" wire:model="item_code" readonly
+                                class="w-full p-4 rounded-xl bg-gray-200 shadow-inner border-none font-black text-xl text-teal-600 tracking-wider cursor-not-allowed">
+                        </div>
                         <div>
                             <label
                                 class="text-[11px] font-black tracking-widest uppercase ml-2 mb-1 block text-gray-500">Nama

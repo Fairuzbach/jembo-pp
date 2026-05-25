@@ -231,6 +231,14 @@ $processItem = function ($id) {
 
                 {{-- Konten Detail Data --}}
                 <div class="space-y-5">
+                    <div class="md:col-span-2 mb-4">
+                        <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">
+                            Item Code
+                        </label>
+                        <div class="w-full p-4 rounded-xl bg-[#e0e5ec] shadow-inner font-bold text-gray-800 text-sm">
+                            {{ $selectedRequest->item_code ?? '-' }}
+                        </div>
+                    </div>
                     <div>
                         <label
                             class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Nama
